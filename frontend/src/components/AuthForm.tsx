@@ -110,7 +110,8 @@ export default function AuthForm({ mode }: AuthFormProps) {
     password: '',
     confirmPassword: '',
     phone: '',
-    bio: ''
+    bio: '',
+    generation: 'genz' as Generation  // Add this field
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -162,40 +163,49 @@ export default function AuthForm({ mode }: AuthFormProps) {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
-    const API_URL = process.env.NEXT_PUBLIC_API_URL;
-    
-    if (mode === 'login') {
-      try {
-        const result = await signIn('credentials', {
-          redirect: false,
-          email: formData.email,
-          password: formData.password,
-          callbackUrl: '/home'
-        });
 
-        if (result?.error) {
-          setError('Invalid credentials');
-        } else if (result?.ok) {
-          router.push('/home');
-          router.refresh();
+    try {
+      if (mode === 'register') {
+        let profileImageUrl = null;
+        if (selectedImage) {
+          const imageFormData = new FormData();
+          imageFormData.append('file', selectedImage);
+          imageFormData.append('upload_preset', 'nexttalk_users'); // Use your preset name
+          
+          try {
+            const cloudinaryResponse = await fetch(
+              `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+              {
+                method: 'POST',
+                body: imageFormData,
+              }
+            );
+
+            if (!cloudinaryResponse.ok) {
+              const errorData = await cloudinaryResponse.json();
+              console.error('Cloudinary error details:', errorData);
+              throw new Error(errorData.error?.message || 'Failed to upload image');
+            }
+
+            const imageData = await cloudinaryResponse.json();
+            console.log('Upload successful:', imageData);
+            profileImageUrl = imageData.secure_url;
+          } catch (uploadError) {
+            console.error('Image upload error:', uploadError);
+            throw new Error('Failed to upload profile image. Please check your upload preset configuration.');
+          }
         }
-      } catch (error) {
-        setError('An error occurred during sign in');
-      }
-    } else {
-      try {
-        const registerResponse = await fetch(`${API_URL}/api/auth/register`, {
+
+        // Register user with the profile image URL
+        const registerResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: formData.name,
-            email: formData.email,
-            password: formData.password,
-            phone: formData.phone || null,
-            bio: formData.bio || null
+            ...formData,
+            profileImage: profileImageUrl,
+            phone: formData.phone || undefined,
+            bio: formData.bio || undefined,
+            generation: formData.generation  // Include generation in registration
           }),
         });
 
@@ -204,6 +214,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
           throw new Error(data.error || 'Registration failed');
         }
 
+        // Continue with sign in
         const signInResult = await signIn('credentials', {
           redirect: false,
           email: formData.email,
@@ -214,27 +225,29 @@ export default function AuthForm({ mode }: AuthFormProps) {
           throw new Error('Error signing in after registration');
         }
 
-        if (selectedImage) {
-          const imageFormData = new FormData();
-          imageFormData.append('image', selectedImage);
-
-          const imageUploadResponse = await fetch(`${API_URL}/api/user/profile-image`, {
-            method: 'POST',
-            body: imageFormData,
-          });
-
-          if (!imageUploadResponse.ok) {
-            console.error('Failed to upload profile image');
-          }
-        }
-
-        router.push('/');
+        router.push(`/${formData.generation}/home`);
         router.refresh();
-      } catch (error) {
-        setError(error instanceof Error ? error.message : 'An error occurred');
+      } else {
+        // Handle login
+        const result = await signIn('credentials', {
+          redirect: false,
+          email: formData.email,
+          password: formData.password,
+        });
+
+        if (result?.error) {
+          setError('Invalid credentials');
+        } else if (result?.ok) {
+          router.push(`/${formData.generation}/home`);
+          router.refresh();
+        }
       }
+    } catch (error) {
+      console.error('Form submission error:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   if (!mounted) return null;
@@ -454,6 +467,25 @@ export default function AuthForm({ mode }: AuthFormProps) {
                         'Write a short bio about yourself'
                       }
                     />
+                  </div>
+
+                  {/* Add Generation Field in the register form */}
+                  <div className="group">
+                    <label className={`text-sm font-medium text-${currentTheme.accent} block mb-2`}>
+                      Choose Your Generation ✨
+                    </label>
+                    <select
+                      name="generation"
+                      value={formData.generation}
+                      onChange={handleChange}
+                      className="w-full p-4 bg-black/30 border border-white/20 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent backdrop-blur-sm text-white placeholder-gray-400 transition-all duration-300 group-hover:bg-black/40"
+                    >
+                      {Object.entries(generationThemes).map(([key, theme]) => (
+                        <option key={key} value={key} className="bg-gray-900">
+                          {theme.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </>
               )}

@@ -1,62 +1,54 @@
-import express, { Request, Response } from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import { createServer } from 'http';
-import { Server, Socket } from 'socket.io';
-import path from 'path';
+import express, { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
+import { corsMiddleware } from './middleware/cors';
+import bodyParser from 'body-parser';
+import multer from 'multer';
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 
-dotenv.config();
-
 const app = express();
-const httpServer = createServer(app);
+const PORT = process.env.PORT || 5000;
 
-// Configure CORS
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-  methods: ['GET', 'POST'],
-  credentials: true,
+// Apply CORS middleware first
+app.use(corsMiddleware);
+
+// Middleware
+app.use(express.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Routes
+app.use('/auth', authRoutes);
+app.use('/user', userRoutes);
+
+// Error handling for multer
+const multerErrorHandler: ErrorRequestHandler = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    res.status(400).json({
+      error: 'File upload error',
+      details: err.message
+    });
+    return;
+  }
+  next(err);
 };
 
-app.use(cors(corsOptions));
-app.use(express.json());
-
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-
-// Add routes
-app.use('/api/auth', authRoutes);
-app.use('/api/user', userRoutes);
-
-// Initialize Socket.IO with CORS
-const io = new Server(httpServer, {
-  cors: corsOptions,
-  pingTimeout: 60000,
-  pingInterval: 25000,
-});
-
-io.on('connection', (socket: Socket) => {
-  console.log('Client connected:', socket.id);
-
-  socket.on('error', (error) => {
-    console.error('Socket error:', error);
+// Global error handler
+const globalErrorHandler: ErrorRequestHandler = (err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    details: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
+};
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
+// Apply error handlers
+app.use(multerErrorHandler);
+app.use(globalErrorHandler);
+
+// Not found handler
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
-// Error handling middleware
-app.use((err: Error, req: Request, res: Response) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something broke!' });
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
-
-app.get('/', (req: Request, res: Response) => {
-  res.json({ message: 'Hello from NextTalk API!' });
-});
-
-const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => console.log(`Server is running on port ${PORT}`));

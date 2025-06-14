@@ -1,10 +1,9 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import crypto from 'crypto';
 
-const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'vFy/=XQnbIfqPdzDRKsVaVEEZT+gjekoF7/Bp1lFyAMQ9';
 
 interface RegisterRequest {
@@ -13,6 +12,7 @@ interface RegisterRequest {
   password: string;
   phone?: string;
   bio?: string;
+  profileImage?: string;  // Add this field
 }
 
 interface LoginRequest {
@@ -22,7 +22,7 @@ interface LoginRequest {
 
 export const register = async (req: Request<{}, {}, RegisterRequest>, res: Response) => {
   try {
-    const { name, email, password, phone, bio } = req.body;
+    const { name, email, password, phone, bio, profileImage } = req.body;
     
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
@@ -31,34 +31,65 @@ export const register = async (req: Request<{}, {}, RegisterRequest>, res: Respo
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
-      data: { name, email, password: hashedPassword, phone, bio }
+      data: { 
+        name, 
+        email, 
+        password: hashedPassword, 
+        phone, 
+        bio,
+        profileImage // Add this field
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        profileImage: true
+      }
     });
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
-    res.status(201).json({ token });
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.status(201).json({ user, token });
   } catch (error) {
+    console.error('Registration error:', error);
     res.status(500).json({ error: 'Error creating user' });
   }
 };
 
-export const login = async (req: Request<{}, {}, LoginRequest>, res: Response) => {
+export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        name: true,
+        profileImage: true
+      }
+    });
+
+    if (!user || !await bcrypt.compare(password, user.password)) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    const token = jwt.sign(
+      { userId: user.id, email: user.email },
+      process.env.JWT_SECRET!,
+      { expiresIn: '24h' }
+    );
 
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token });
+    const { password: _, ...userWithoutPassword } = user;
+    res.json({ user: userWithoutPassword, token });
   } catch (error) {
-    res.status(500).json({ error: 'Login error' });
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -114,5 +145,33 @@ export const resetPassword = async (req: Request, res: Response) => {
     res.json({ message: 'Password reset successful' });
   } catch (error) {
     res.status(500).json({ error: 'Error resetting password' });
+  }
+};
+
+export const getCurrentUser = async (req: Request, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        profileImage: true,
+        phone: true,
+        bio: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching user' });
   }
 };

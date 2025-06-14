@@ -1,8 +1,8 @@
+import { v2 as cloudinary } from 'cloudinary';
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { PrismaClient } from '@prisma/client';
-import { v2 as cloudinary } from 'cloudinary';
-import sharp from 'sharp';
+import fs from 'fs';
 
 const prisma = new PrismaClient();
 
@@ -102,37 +102,50 @@ export const uploadProfileImage = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No file provided' });
     }
 
-    // Optimize image before upload
-    const optimizedImageBuffer = await sharp(req.file.buffer)
-      .resize(400, 400, { fit: 'cover' })
-      .toFormat('jpeg')
-      .jpeg({ quality: 80 })
-      .toBuffer();
+    try {
+      // Upload to Cloudinary
+      const result = await cloudinary.uploader.upload(req.file.path, {
+        folder: 'nexttalkv2/profile-images',
+        public_id: `user-${req.user.id}`,
+        overwrite: true,
+        resource_type: 'auto'
+      });
 
-    // Convert buffer to base64
-    const base64Image = `data:image/jpeg;base64,${optimizedImageBuffer.toString('base64')}`;
+      // Clean up the local file
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Error deleting local file:', err);
+      });
 
-    // Upload to Cloudinary
-    const uploadResponse = await cloudinary.uploader.upload(base64Image, {
-      folder: 'nexttalk/profile-images',
-      public_id: `user-${req.user.id}`,
-      overwrite: true,
-    });
+      // Update user profile
+      const updatedUser = await prisma.user.update({
+        where: { id: req.user.id },
+        data: { profileImage: result.secure_url },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          profileImage: true
+        }
+      });
 
-    // Update user profile in database
-    const updatedUser = await prisma.user.update({
-      where: { id: req.user.id },
-      data: { profileImage: uploadResponse.secure_url },
-    });
+      res.json({
+        success: true,
+        imageUrl: result.secure_url,
+        user: updatedUser
+      });
 
-    res.json({
-      success: true,
-      imageUrl: uploadResponse.secure_url
-    });
+    } catch (uploadError) {
+      // Clean up the local file on upload error
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Error deleting local file:', err);
+      });
+      throw uploadError;
+    }
+
   } catch (error) {
     console.error('Profile image upload error:', error);
-    res.status(500).json({
-      error: 'Failed to upload profile image',
+    res.status(500).json({ 
+      error: 'Failed to upload image',
       details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
