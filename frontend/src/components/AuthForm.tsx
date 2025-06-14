@@ -8,12 +8,13 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { GeistMono } from 'geist/font/mono';
 import { Eye, EyeOff, Sparkles, Zap, Star, Heart, Coffee } from 'lucide-react';
+import { UserFormData } from '@/types/auth';
 
 interface AuthFormProps {
   mode: 'login' | 'register';
   onSubmit?: (e: React.FormEvent) => Promise<void>;
-  onChange?: (data: FormData) => void;
-  initialData?: FormData;
+  onChange?: (data: UserFormData) => void;
+  initialData?: UserFormData;
   error?: string | null;
 }
 
@@ -108,14 +109,14 @@ export default function AuthForm({ mode, onSubmit, onChange, initialData, error:
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
     phone: '',
     bio: '',
-    generation: 'genz' as Generation  // Add this field
+    generation: 'genz'
   });
 
   const [showPassword, setShowPassword] = useState(false);

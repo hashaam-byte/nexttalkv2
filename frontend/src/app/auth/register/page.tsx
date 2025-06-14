@@ -5,22 +5,12 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import AuthForm from '@/components/AuthForm';
-
-interface FormData {
-  name: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-  phone?: string;
-  bio?: string;
-  generation?: string;
-  profileImage?: string;
-}
+import { UserFormData } from '@/types/auth';
 
 export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
     password: '',
@@ -70,7 +60,7 @@ export default function RegisterPage() {
     }
   };
 
-  const handleFormDataChange = (data: FormData) => {
+  const handleFormDataChange = (data: UserFormData) => {
     setFormData(data);
   };
 
