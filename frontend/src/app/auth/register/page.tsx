@@ -6,9 +6,29 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import AuthForm from '@/components/AuthForm';
 
+interface FormData {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  phone?: string;
+  bio?: string;
+  generation?: string;
+  profileImage?: string;
+}
+
 export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    phone: '',
+    bio: '',
+    generation: 'genz'
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +53,7 @@ export default function RegisterPage() {
         email: formData.email,
         password: formData.password,
         redirect: false,
-        callbackUrl: '/home'
+        callbackUrl: `/${formData.generation}/home`
       });
 
       if (signInResponse?.error) {
@@ -41,8 +61,8 @@ export default function RegisterPage() {
         return;
       }
 
-      // Redirect to home page
-      router.push('/home');
+      // Redirect to generation-specific home page
+      router.push(`/${formData.generation}/home`);
       
     } catch (error) {
       console.error('Registration error:', error);
@@ -50,5 +70,17 @@ export default function RegisterPage() {
     }
   };
 
-  return <AuthForm mode="register" />;
+  const handleFormDataChange = (data: FormData) => {
+    setFormData(data);
+  };
+
+  return (
+    <AuthForm 
+      mode="register" 
+      onSubmit={handleSubmit}
+      onChange={handleFormDataChange}
+      initialData={formData}
+      error={error}
+    />
+  );
 }

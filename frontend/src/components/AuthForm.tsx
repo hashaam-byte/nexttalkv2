@@ -11,6 +11,10 @@ import { Eye, EyeOff, Sparkles, Zap, Star, Heart, Coffee } from 'lucide-react';
 
 interface AuthFormProps {
   mode: 'login' | 'register';
+  onSubmit?: (e: React.FormEvent) => Promise<void>;
+  onChange?: (data: FormData) => void;
+  initialData?: FormData;
+  error?: string | null;
 }
 
 type Generation = 'genalpha' | 'genz' | 'millennial' | 'genx' | 'boomer';
@@ -92,10 +96,10 @@ const detectGeneration = (): Generation => {
   return 'boomer';
 };
 
-export default function AuthForm({ mode }: AuthFormProps) {
+export default function AuthForm({ mode, onSubmit, onChange, initialData, error: propError }: AuthFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(propError || null);
   const [generation, setGeneration] = useState<Generation>('genz');
   const [mounted, setMounted] = useState(false);
   
@@ -140,6 +144,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    onChange && onChange({ ...formData, [name]: value });
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
