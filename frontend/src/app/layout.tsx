@@ -14,11 +14,11 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const headersList = headers();
-  const deviceType = headersList.get('x-device-type');
+  const headersList = await headers();
+  const deviceType = headersList.get('x-device-type') || 'desktop';
 
   return (
-    <html lang="en" data-device={deviceType} className={`${GeistMono.className}`}>
+    <html lang="en" data-device={deviceType} className={GeistMono.className}>
       <body className="antialiased">
         <Providers>
           {children}
